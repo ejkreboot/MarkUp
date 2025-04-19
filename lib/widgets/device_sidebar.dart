@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/device_connection_manager.dart';
 import 'dart:io';
 
 class DeviceSidebar extends StatefulWidget {
@@ -21,6 +22,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   bool _isConnected = false;
   bool _isConnecting = false;
   String? _errorMessage;
+  final DeviceConnectionManager _deviceManager = DeviceConnectionManager();
 
   Future<void> _connectToDevice() async {
     setState(() {
@@ -29,8 +31,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     });
 
     try {
-      final socket = await Socket.connect(_ipAddress, 22, timeout: const Duration(seconds: 2));
-      socket.destroy();
+      await _deviceManager.connect(_ipAddress, _password);
       setState(() {
         _isConnected = true;
       });
@@ -47,6 +48,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   }
 
   void _disconnect() {
+    _deviceManager.disconnect();
     setState(() {
       _isConnected = false;
       _ipAddress = '';
