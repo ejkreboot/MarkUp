@@ -1,0 +1,45 @@
+# Flutter stuff
+.dart_tool/
+.packages
+.pub-cache/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-versions
+.idea/
+.sconsign.dblite
+.melosecrets
+
+# macOS
+macos/Flutter/ephemeral/
+
+# iOS
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/.symlinks/
+ios/Runner.xcworkspace/
+
+# Android
+android/.gradle/
+android/app/build/
+android/gradle/
+android/.idea/
+
+# VSCode
+.vscode/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcworkspace
+
+# Other
+*.iml
+*.log
+*.tmp
+*.swp
+*.lock
+*.DS_Store
+*.class
+*.ipr
+*.iws
