@@ -1,42 +1,52 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:dartssh2/dartssh2.dart';
+import 'package:flutter/foundation.dart';
+import '../models/templates_list.dart';
+import 'ssh_utils.dart'; 
 
 class DeviceConnectionManager {
-  late SSHClient _client;
+  late dynamic _client; // <- Accept anything
   late SSHSocket _socket;
   bool _isConnected = false;
+
+  DeviceConnectionManager({dynamic testClient}) {
+    if (testClient != null) {
+      _client = testClient;
+      _isConnected = true;
+    }
+  }
 
   bool get isConnected => _isConnected;
 
   Future<void> connect(String ip, String password) async {
     _socket = await SSHSocket.connect(ip, 22);
-    _client = SSHClient(_socket,
+    _client = SSHClient(
+      _socket,
       username: 'root',
       onPasswordRequest: () => password,
     );
     _isConnected = true;
   }
 
-Future<void> disconnect() async {
-  _client.close();
-  _isConnected = false;
-}
+  void disconnect() {
+    _client.close();
+    _isConnected = false;
+  }
 
   Future<String> downloadFile(String remotePath) async {
-    if (!_isConnected) throw Exception('Not connected');
-    final sftp = await _client!.sftp();
+    _ensureConnected();
+    final sftp = await _client.sftp();
     final file = await sftp.open(remotePath, mode: SftpFileOpenMode.read);
-
     final fileLength = (await file.stat()).size ?? 0;
     final fileData = await file.readBytes(length: fileLength);
     await file.close();
-
     return String.fromCharCodes(fileData);
   }
 
   Future<void> uploadFile(File localFile, String remotePath) async {
-    if (!_isConnected) throw Exception('Not connected');
-    final sftp = await _client!.sftp();
+    _ensureConnected();
+    final sftp = await _client.sftp();
     final remoteFile = await sftp.open(
       remotePath,
       mode: SftpFileOpenMode.create | SftpFileOpenMode.write | SftpFileOpenMode.truncate,
@@ -44,5 +54,122 @@ Future<void> disconnect() async {
     final bytes = await localFile.readAsBytes();
     await remoteFile.writeBytes(bytes);
     await remoteFile.close();
+  }
+
+  Future<void> uploadStringAsFile(String content, String remotePath) async {
+    _ensureConnected();
+    final sftp = await _client.sftp();
+    final remoteFile = await sftp.open(
+      remotePath,
+      mode: SftpFileOpenMode.create | SftpFileOpenMode.write | SftpFileOpenMode.truncate,
+    );
+    await remoteFile.writeBytes(Uint8List.fromList(content.codeUnits));
+    await remoteFile.close();
+  }
+
+  Future<void> ensureTemplatesFolderExists() async {
+    _ensureConnected();
+    await sshExecuteCommand(_client, 'test -d /home/root/templates || mkdir -p /home/root/templates');
+  }
+
+  Future<void> createTemplateSymlink(String filename) async {
+    _ensureConnected();
+    final sourcePath = '/home/root/templates/$filename';
+    final destPath = '/usr/share/remarkable/templates/$filename';
+    await sshExecuteCommand(_client, 'ln -sf "$sourcePath" "$destPath"');
+  }
+
+  Future<bool> isConnectionAlive() async {
+    if (!_isConnected) return false;
+    try {
+      await sshExecuteCommand(_client, 'true');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> remoteFileExists(String remotePath) async {
+    _ensureConnected();
+    try {
+      await sshExecuteCommand(_client, 'test -f "$remotePath"');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> copyRemoteFile(String sourcePath, String destPath) async {
+    _ensureConnected();
+    await sshExecuteCommand(_client, 'cp "$sourcePath" "$destPath"');
+  }
+
+  Future<String> fetchTemplatesJson() async {
+    return await downloadFile('/usr/share/remarkable/templates/templates.json');
+  }
+
+  String normalizeTemplateFilename(String filename) {
+    if (filename.startsWith('P ')) return filename;
+    return 'P $filename';
+  }
+
+  Future<void> uploadTemplateAndUpdateJson({
+    required File localSvgFile,
+    required String templateName,
+    required String templateFilename,
+  }) async {
+    _ensureConnected();
+
+    if (!localSvgFile.path.toLowerCase().endsWith('.svg')) {
+      throw Exception('Only SVG files are supported.');
+    }
+
+    final rawFilename = localSvgFile.uri.pathSegments.last;
+    final normalizedFilename = normalizeTemplateFilename(rawFilename);
+
+    await ensureTemplatesFolderExists();
+    await uploadFile(localSvgFile, '/home/root/templates/$normalizedFilename');
+    await createTemplateSymlink(normalizedFilename);
+
+    final templatesJsonPath = '/usr/share/remarkable/templates/templates.json';
+    final backupPath = '/usr/share/remarkable/templates/templates.json.bak';
+    await _ensureBackupExists(templatesJsonPath, backupPath);
+    await _updateTemplatesJson(
+      templatesJsonPath: templatesJsonPath,
+      templateName: templateName,
+      templateFilename: normalizedFilename.replaceAll('.svg', ''),
+    );
+  }
+
+  Future<void> _ensureBackupExists(String templatesJsonPath, String backupPath) async {
+    debugPrint('Checking if backup exists.');
+    final backupExists = await remoteFileExists(backupPath);
+    if (!backupExists) {
+      debugPrint('Creating backup: $backupPath');
+      await copyRemoteFile(templatesJsonPath, backupPath);
+    } else {
+      debugPrint('Backup already exists: $backupPath');
+    }
+  }
+
+  Future<void> _updateTemplatesJson({
+    required String templatesJsonPath,
+    required String templateName,
+    required String templateFilename,
+  }) async {
+    final templatesJsonString = await downloadFile(templatesJsonPath);
+    final templatesList = TemplatesList.fromJson(templatesJsonString);
+
+    templatesList.addTemplate(
+      name: templateName,
+      filename: templateFilename,
+    );
+
+    final updatedJsonString = templatesList.toJsonString();
+    await uploadStringAsFile(updatedJsonString, templatesJsonPath);
+  }
+
+  void _ensureConnected() {
+    if (!_isConnected) throw Exception('Not connected');
   }
 }

@@ -34,9 +34,15 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
       final files = <FileSystemEntity>[];
 
       for (final entity in children) {
-        if (p.basename(entity.path).startsWith('.')) {
+        final notAllowed = (! FileSystemEntity.isDirectorySync(entity.path) &&
+                            ! entity.path.toLowerCase().endsWith('.svg') && 
+                            ! entity.path.toLowerCase().endsWith('.png')) |
+                            p.basename(entity.path).startsWith('.');
+
+        if (notAllowed) {
           continue;
         }
+
         if (FileSystemEntity.isDirectorySync(entity.path)) {
           folders.add(entity);
         } else {
@@ -80,23 +86,18 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
 
   void _handleFileDropped(String targetPath, File file) {
     print('Dropped file: ${file.path} onto $targetPath');
-
-    // 🔥 Later we'll move/copy/upload the file to the device!
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(currentPath),
-      ),
       body: Row(
         children: [
           DeviceSidebar(
             onCardTap: _handleDirectoryTap,
             onFileDropped: _handleFileDropped,
           ),
-          const VerticalDivider(width: 1),
+          const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
           Expanded(
             flex: 2,
             child: FileList(
@@ -106,7 +107,7 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
               onFileTap: _handleFileTap,
             ),
           ),
-          const VerticalDivider(width: 1),
+          const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
           SizedBox(
             width: 320,
             child: PreviewPanel(

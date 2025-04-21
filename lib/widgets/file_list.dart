@@ -20,81 +20,63 @@ class FileList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: const BoxDecoration(
+            padding: const EdgeInsets.symmetric(vertical: 0),
+            decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: Colors.grey, width: 0.5),
+                bottom: BorderSide(color: Colors.grey.shade300, width: 0.25),
               ),
             ),
             child: Row(
-              children: const [
+              children: [
                 Expanded(
-                  flex: 3,
-                  child: Text('File Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  flex: 4,
+                  child: 
+                  Text(
+                    "   $currentPath",
+                    style: Theme.of(context).textTheme.titleSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 Expanded(
-                  flex: 1,
+                  flex: 2,
                   child: Text('Modified', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           Expanded(
-            child: ListView.separated(
+            child: ListView.builder(
               itemCount: entries.length,
-              separatorBuilder: (_, __) => Divider(
-                color: Colors.grey.shade300,
-                height: 1,
-                thickness: 0.5,
-              ),
               itemBuilder: (context, index) {
                 final entity = entries[index];
                 final path = entity.path;
                 final name = p.basename(path);
                 final isUpEntry = name == '..';
+                final isDir = FileSystemEntity.isDirectorySync(path);
+                DateTime? modified;
 
                 if (isUpEntry) {
-                  return InkWell(
-                    onTap: () => onDirectoryTap(Directory(currentPath).parent.path),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        children: const [
-                          Expanded(
-                            flex: 3,
-                            child: Row(
-                              children: [
-                                Icon(Icons.arrow_upward, size: 20),
-                                SizedBox(width: 8),
-                                Text('..', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w300)),
-                              ],
-                            ),
-                          ),
-                          Expanded(flex: 1, child: SizedBox.shrink()),
-                        ],
-                      ),
-                    ),
+                  return _buildUpEntry(
+                    context,
+                    () => onDirectoryTap(Directory(currentPath).parent.path),
                   );
                 }
-
-                final isDir = FileSystemEntity.isDirectorySync(path);
-                final isSvg = path.toLowerCase().endsWith('.svg');
-                DateTime? modified;
 
                 try {
                   modified = File(path).lastModifiedSync();
                 } catch (_) {}
+
                 return Draggable<FileSystemEntity>(
                   data: entity,
                   feedback: Material(
                     color: Colors.transparent,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 200),
+                      constraints: const BoxConstraints(maxWidth: 400),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -106,7 +88,6 @@ class FileList extends StatelessWidget {
                           const SizedBox(width: 8),
                           Text(
                             name,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -115,7 +96,7 @@ class FileList extends StatelessWidget {
                   ),
                   childWhenDragging: Opacity(
                     opacity: 0.5,
-                    child: _buildFileRow(context, entity, name, isDir, isSvg, modified),
+                    child: _buildFileRow(context, entity, name, isDir, modified, index),
                   ),
                   child: GestureDetector(
                     onTap: () {
@@ -125,53 +106,102 @@ class FileList extends StatelessWidget {
                         onFileTap(entity);
                       }
                     },
-                    child: _buildFileRow(context, entity, name, isDir, isSvg, modified),
+                    child: _buildFileRow(context, entity, name, isDir, modified, index),
                   ),
                 );
               },
             ),
           ),
+
         ],
       ),
     );
   }
 
-  Widget _buildFileRow(BuildContext context, FileSystemEntity entity, String name, bool isDir, bool isSvg, DateTime? modified) {
-    return Padding(
+  Widget _buildFileRow(
+    BuildContext context,
+    FileSystemEntity entity,
+    String name,
+    bool isDir,
+    DateTime? modified,
+    int index,
+  ) {
+    return Container(
+      width: double.infinity,  // <-- FULL WIDTH background
+      color: index.isEven ? const Color.fromARGB(255, 252, 252, 252) : Colors.grey.shade100,
+      padding: const EdgeInsets.symmetric(vertical: 8.0),  // Top and bottom breathing
+      child: Padding(
+        padding: const EdgeInsets.only(left: 8.0),  // <-- NEW: left-side breathing room
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: isDir
+                        ? const Icon(Icons.folder_outlined, size: 20, color: Colors.black87)
+                        : const Icon(Icons.insert_drive_file_outlined, size: 20, color: Colors.black87),
+                  ),
+                  Flexible(
+                    child: Container (
+                      constraints: BoxConstraints(maxWidth: 300, minWidth: 300, ),
+                      child: Text(
+                        name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, 
+                                               color: Colors.black87, 
+                                               fontWeight:  FontWeight.w300),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: modified != null
+                  ? Text(
+                      '${modified.year}-${modified.month.toString().padLeft(2, '0')}-${modified.day.toString().padLeft(2, '0')}',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w300),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUpEntry(BuildContext context, VoidCallback onTap) {
+    return Container(
+      color: const Color.fromARGB(255, 252, 252, 252),
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
           Expanded(
             flex: 3,
-            child: Row(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: isDir
-                      ? const Icon(Icons.folder_outlined, size: 20)
-                      : isSvg
-                          ? SvgPicture.file(File(entity.path), width: 20, height: 20)
-                          : const Icon(Icons.insert_drive_file_outlined, size: 20),
-                ),
-                Flexible(
-                  child: Text(
-                    name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w300),
+            child: GestureDetector(
+              onTap: onTap,
+              child: Row(
+                children: const [
+                  Padding(
+                    padding: EdgeInsets.only(left: 8.0, right: 8.0),
+                    child: Icon(Icons.arrow_upward, size: 20),
                   ),
-                ),
-              ],
+                  Flexible(
+                    child: Text(
+                      '..',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w300),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          Expanded(
-            flex: 1,
-            child: modified != null
-                ? Text(
-                    '${modified.year}-${modified.month.toString().padLeft(2, '0')}-${modified.day.toString().padLeft(2, '0')}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w300),
-                  )
-                : const SizedBox.shrink(),
-          ),
+          const Expanded(flex: 1, child: SizedBox.shrink()),
         ],
       ),
     );
