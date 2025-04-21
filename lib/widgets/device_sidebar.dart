@@ -5,12 +5,10 @@ import 'dart:async';
 
 class DeviceSidebar extends StatefulWidget {
   final void Function(String path) onCardTap;
-  final void Function(String path, File droppedFile) onFileDropped;
 
   const DeviceSidebar({
     super.key,
-    required this.onCardTap,
-    required this.onFileDropped,
+    required this.onCardTap
   });
 
   @override
@@ -122,6 +120,56 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     }
   }
 
+  Future<void> _handleSplashFileDrop(File droppedFile) async {
+    if (!_isConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not connected to device.')),
+        );
+      }
+      return;
+    }
+
+    if (!droppedFile.path.toLowerCase().endsWith('.png')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only PNG files are supported for splash screens.')),
+        );
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isUploadingTemplate = true; // TODO: Create separate state for splash screens
+      });
+    }
+
+    try {
+      await _deviceManager.uploadSplashFile(
+        pngFile: droppedFile,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Splash screen uploaded successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingTemplate = false;
+        });
+      }
+    }
+  }
+
   void _disconnect() {
     _deviceManager.disconnect();
     _connectionCheckerTimer?.cancel();
@@ -169,7 +217,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
             icon: Icons.power_settings_new_outlined,
             dropPath: '/splash',
             onTap: () => widget.onCardTap('/splash'),
-            onFileDropped: widget.onFileDropped,
+            onFileDropped: (path, droppedFile) => _handleSplashFileDrop(droppedFile),
           ),
           const Spacer(),
           SizedBox(
@@ -313,7 +361,6 @@ class _DashboardDropCard extends StatelessWidget {
   final bool showSpinner;
 
   const _DashboardDropCard({
-    super.key,
     required this.title,
     required this.icon,
     required this.dropPath,

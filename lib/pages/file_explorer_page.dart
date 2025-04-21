@@ -84,18 +84,13 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
     });
   }
 
-  void _handleFileDropped(String targetPath, File file) {
-    print('Dropped file: ${file.path} onto $targetPath');
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Row(
         children: [
           DeviceSidebar(
-            onCardTap: _handleDirectoryTap,
-            onFileDropped: _handleFileDropped,
+            onCardTap: _handleDirectoryTap
           ),
           const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
           Expanded(

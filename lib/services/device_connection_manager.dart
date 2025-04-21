@@ -119,7 +119,6 @@ class DeviceConnectionManager {
     required String templateFilename,
   }) async {
     _ensureConnected();
-
     if (!localSvgFile.path.toLowerCase().endsWith('.svg')) {
       throw Exception('Only SVG files are supported.');
     }
@@ -139,6 +138,19 @@ class DeviceConnectionManager {
       templateName: templateName,
       templateFilename: normalizedFilename.replaceAll('.svg', ''),
     );
+  }
+
+  Future<void> uploadSplashFile({
+    required File pngFile,
+  }) async {
+    _ensureConnected();
+
+    if (!pngFile.path.toLowerCase().endsWith('.svg')) {
+      throw Exception('Only PNG files are supported for splash files.');
+    }
+
+    final filename = pngFile.uri.pathSegments.last;
+    await uploadFile(pngFile, '/usr/share/remarkable/$filename');
   }
 
   Future<void> _ensureBackupExists(String templatesJsonPath, String backupPath) async {
