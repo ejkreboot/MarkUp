@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
-
 import '../widgets/device_sidebar.dart';
 import '../widgets/file_list.dart';
 import '../widgets/preview_panel.dart';
@@ -72,9 +70,14 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
     _loadDirectory(path);
   }
 
-  void _handleFileTap(FileSystemEntity file) {
+  void _handleSelectionChange(List<FileSystemEntity> selectedFiles) {
+
     setState(() {
-      selectedFile = file;
+      if (selectedFiles.isNotEmpty) {
+        selectedFile = selectedFiles.last;
+      } else {
+        selectedFile = null;
+      }
     });
   }
 
@@ -89,9 +92,7 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
     return Scaffold(
       body: Row(
         children: [
-          DeviceSidebar(
-            onCardTap: _handleDirectoryTap
-          ),
+          DeviceSidebar(),
           const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
           Expanded(
             flex: 2,
@@ -99,7 +100,7 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
               entries: entries,
               currentPath: currentPath,
               onDirectoryTap: _handleDirectoryTap,
-              onFileTap: _handleFileTap,
+              onSelectionChanged: _handleSelectionChange,
             ),
           ),
           const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),

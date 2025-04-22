@@ -4,11 +4,36 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 import '../models/templates_list.dart';
 import 'ssh_utils.dart'; 
+import 'dart:convert';  
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class DeviceConnectionManager {
-  late dynamic _client; // <- Accept anything
+  late dynamic _client; 
   late SSHSocket _socket;
   bool _isConnected = false;
+  static const _storage = FlutterSecureStorage();
+  static const _passwordKey = 'remarkable_password';
+
+  String? _cachedPassword;
+  bool get isConnected => _isConnected;
+
+  Future<String?> getSavedPassword() async {
+    if (_cachedPassword != null) {
+      return _cachedPassword;
+    }
+    _cachedPassword = await _storage.read(key: _passwordKey);
+    return _cachedPassword;
+  }
+
+  Future<void> savePassword(String password) async {
+    _cachedPassword = password;
+    await _storage.write(key: _passwordKey, value: password);
+  }
+
+  Future<void> clearPassword() async {
+    _cachedPassword = null;
+    await _storage.delete(key: _passwordKey);
+  }
 
   DeviceConnectionManager({dynamic testClient}) {
     if (testClient != null) {
@@ -17,9 +42,8 @@ class DeviceConnectionManager {
     }
   }
 
-  bool get isConnected => _isConnected;
-
-  Future<void> connect(String ip, String password) async {
+  Future<void> connect(String ip, String? password) async {
+    if(password == null) return;
     _socket = await SSHSocket.connect(ip, 22);
     _client = SSHClient(
       _socket,
@@ -34,6 +58,10 @@ class DeviceConnectionManager {
     _isConnected = false;
   }
 
+  void _ensureConnected() {
+    if (!_isConnected) throw Exception('Not connected');
+  }
+
   Future<String> downloadFile(String remotePath) async {
     _ensureConnected();
     final sftp = await _client.sftp();
@@ -41,7 +69,7 @@ class DeviceConnectionManager {
     final fileLength = (await file.stat()).size ?? 0;
     final fileData = await file.readBytes(length: fileLength);
     await file.close();
-    return String.fromCharCodes(fileData);
+    return utf8.decode(fileData);
   }
 
   Future<void> uploadFile(File localFile, String remotePath) async {
@@ -164,6 +192,16 @@ class DeviceConnectionManager {
     }
   }
 
+  String _safeJsonEncode(Object object) {
+    return JsonEncoder.withIndent('  ').convert(object).replaceAllMapped(
+      RegExp(r'[\u007F-\uFFFF]'),
+      (match) {
+        final c = match.group(0)!.codeUnitAt(0);
+        return '\\u${c.toRadixString(16).padLeft(4, '0')}';
+      },
+    );
+  }
+
   Future<void> _updateTemplatesJson({
     required String templatesJsonPath,
     required String templateName,
@@ -177,11 +215,7 @@ class DeviceConnectionManager {
       filename: templateFilename,
     );
 
-    final updatedJsonString = templatesList.toJsonString();
+    final updatedJsonString = _safeJsonEncode(templatesList);
     await uploadStringAsFile(updatedJsonString, templatesJsonPath);
-  }
-
-  void _ensureConnected() {
-    if (!_isConnected) throw Exception('Not connected');
   }
 }

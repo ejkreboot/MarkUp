@@ -6,6 +6,12 @@ class TemplatesList {
 
   TemplatesList({required this.templates});
 
+  Map<String, dynamic> toJson() {
+    return {
+      'templates': templates.map((entry) => entry.toJson()).toList(),
+    };
+  }
+
   factory TemplatesList.fromJson(String jsonString) {
     final data = json.decode(jsonString) as Map<String, dynamic>;
     final templatesData = data['templates'] as List;
@@ -25,7 +31,7 @@ class TemplatesList {
     final newEntry = TemplateEntry(
       name: name,
       filename: filename,
-      iconCode: '\\ue9a9', // Default for now
+      iconCode: '\ue9a9', // Default for now
       categories: ['User'], // Default for now
     );
     templates.add(newEntry);

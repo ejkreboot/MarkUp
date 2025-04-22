@@ -11,15 +11,6 @@ class TemplateEntry {
     required this.categories,
   });
 
-  factory TemplateEntry.fromJson(Map<String, dynamic> json) {
-    return TemplateEntry(
-      name: json['name'] as String,
-      filename: json['filename'] as String,
-      iconCode: json['iconCode'] as String,
-      categories: List<String>.from(json['categories'] as List),
-    );
-  }
-
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -27,5 +18,14 @@ class TemplateEntry {
       'iconCode': iconCode,
       'categories': categories,
     };
+  }
+
+  factory TemplateEntry.fromJson(Map<String, dynamic> json) {
+    return TemplateEntry(
+      name: json['name'] as String,
+      filename: json['filename'] as String,
+      iconCode: json['iconCode'] as String,
+      categories: List<String>.from(json['categories'] as List),
+    );
   }
 }

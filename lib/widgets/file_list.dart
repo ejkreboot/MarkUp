@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 
-class FileList extends StatelessWidget {
+class FileList extends StatefulWidget {
   final List<FileSystemEntity> entries;
   final String currentPath;
   final void Function(String path) onDirectoryTap;
-  final void Function(FileSystemEntity file) onFileTap;
+  final void Function(List<FileSystemEntity> selectedFiles) onSelectionChanged;
 
   const FileList({
     super.key,
     required this.entries,
     required this.currentPath,
     required this.onDirectoryTap,
-    required this.onFileTap,
+    required this.onSelectionChanged
   });
 
+  @override
+  State<FileList> createState() => _FileListState();
+}
+
+class _FileListState extends State<FileList> {
+  Set<FileSystemEntity> selectedFiles = {};
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -34,16 +39,18 @@ class FileList extends StatelessWidget {
               children: [
                 Expanded(
                   flex: 4,
-                  child: 
-                  Text(
-                    "   $currentPath",
+                  child: Text(
+                    "   ${widget.currentPath}",   // <-- ADDED widget.
                     style: Theme.of(context).textTheme.titleSmall,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Expanded(
                   flex: 2,
-                  child: Text('Modified', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  child: Text(
+                    'Modified',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
                 ),
               ],
             ),
@@ -51,19 +58,20 @@ class FileList extends StatelessWidget {
           const SizedBox(height: 12),
           Expanded(
             child: ListView.builder(
-              itemCount: entries.length,
+              itemCount: widget.entries.length,   
               itemBuilder: (context, index) {
-                final entity = entries[index];
+                final entity = widget.entries[index]; 
                 final path = entity.path;
                 final name = p.basename(path);
                 final isUpEntry = name == '..';
                 final isDir = FileSystemEntity.isDirectorySync(path);
-                DateTime? modified;
+                final isSelected = selectedFiles.contains(entity);
 
+                DateTime? modified;
                 if (isUpEntry) {
                   return _buildUpEntry(
                     context,
-                    () => onDirectoryTap(Directory(currentPath).parent.path),
+                    () => widget.onDirectoryTap(Directory(widget.currentPath).parent.path), 
                   );
                 }
 
@@ -71,48 +79,59 @@ class FileList extends StatelessWidget {
                   modified = File(path).lastModifiedSync();
                 } catch (_) {}
 
-                return Draggable<FileSystemEntity>(
-                  data: entity,
+                return Draggable<List<FileSystemEntity>>(  
+                  data: selectedFiles.isNotEmpty
+                      ? widget.entries.where((e) => selectedFiles.contains(e)).toList()
+                      : [entity],
                   feedback: Material(
                     color: Colors.transparent,
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 400),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isDir ? Icons.folder_outlined : Icons.insert_drive_file_outlined,
-                            size: 20,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.file_copy_outlined, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              selectedFiles.length > 1
+                                  ? '${selectedFiles.length} files'
+                                  : p.basename(path),
+                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   childWhenDragging: Opacity(
                     opacity: 0.5,
-                    child: _buildFileRow(context, entity, name, isDir, modified, index),
+                    child: _buildFileRow(context, entity, name, isDir, modified, index, isSelected), // <-- PASSES isSelected
                   ),
                   child: GestureDetector(
-                    onTap: () {
-                      if (isDir) {
-                        onDirectoryTap(path);
-                      } else {
-                        onFileTap(entity);
-                      }
-                    },
-                    child: _buildFileRow(context, entity, name, isDir, modified, index),
+                  onTap: () {
+                    if (isDir) {
+                      widget.onDirectoryTap(path);
+                      return;
+                    }
+
+                    setState(() {
+                      selectedFiles.contains(entity)
+                        ? selectedFiles.remove(entity)
+                        : selectedFiles.add(entity);
+                    });
+                    widget.onSelectionChanged(selectedFiles.toList());
+                  }, 
+                   child: _buildFileRow(context, entity, name, isDir, modified, index, isSelected),  // <-- PASSES isSelected
                   ),
                 );
               },
             ),
           ),
-
         ],
       ),
     );
@@ -125,13 +144,16 @@ class FileList extends StatelessWidget {
     bool isDir,
     DateTime? modified,
     int index,
+    bool isSelected, 
   ) {
     return Container(
-      width: double.infinity,  // <-- FULL WIDTH background
-      color: index.isEven ? const Color.fromARGB(255, 252, 252, 252) : Colors.grey.shade100,
-      padding: const EdgeInsets.symmetric(vertical: 8.0),  // Top and bottom breathing
+      width: double.infinity,
+      color: isSelected
+          ? Color.fromARGB(25, 25, 25, 25)
+          : (index.isEven ? const Color.fromARGB(255, 252, 252, 252) : Colors.grey.shade100),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Padding(
-        padding: const EdgeInsets.only(left: 8.0),  // <-- NEW: left-side breathing room
+        padding: const EdgeInsets.only(left: 8.0),
         child: Row(
           children: [
             Expanded(
@@ -145,14 +167,12 @@ class FileList extends StatelessWidget {
                         : const Icon(Icons.insert_drive_file_outlined, size: 20, color: Colors.black87),
                   ),
                   Flexible(
-                    child: Container (
-                      constraints: BoxConstraints(maxWidth: 300, minWidth: 300, ),
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 300, minWidth: 300),
                       child: Text(
                         name,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 14, 
-                                               color: Colors.black87, 
-                                               fontWeight:  FontWeight.w300),
+                        style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w300),
                       ),
                     ),
                   ),

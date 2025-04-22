@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import '../services/device_connection_manager.dart';
 import 'dart:io';
 import 'dart:async';
+import 'package:markup/dialogs/password_dialog.dart';  // <-- Import your dialog function
 
 class DeviceSidebar extends StatefulWidget {
-  final void Function(String path) onCardTap;
 
   const DeviceSidebar({
-    super.key,
-    required this.onCardTap
+    super.key
   });
 
   @override
@@ -17,7 +16,6 @@ class DeviceSidebar extends StatefulWidget {
 
 class _DeviceSidebarState extends State<DeviceSidebar> {
   String _ipAddress = '';
-  String _password = '';
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _isUploadingTemplate = false;
@@ -25,30 +23,41 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   final DeviceConnectionManager _deviceManager = DeviceConnectionManager();
 
   Timer? _connectionCheckerTimer;
-
-  Future<void> _onTemplatesTapped() async {
-    if (!_isConnected) {
-      debugPrint('Not connected to device.');
-      return;
-    }
-
-    try {
-      final jsonContent = await _deviceManager.fetchTemplatesJson();
-      debugPrint('templates.json content:');
-      debugPrint(jsonContent);
-    } catch (e) {
-      debugPrint('Error fetching templates.json: $e');
-    }
-  }
   
   Future<void> _connectToDevice() async {
+    PasswordDialogResult? result;
+
     setState(() {
       _isConnecting = true;
       _errorMessage = null;
     });
 
+    final deviceManager = DeviceConnectionManager();
+
+    // To try retrieving a password:
+    String? password = await deviceManager.getSavedPassword();
+
+    if (password == null) {
+      if(mounted) { // make linter happy
+        result = await showPasswordDialog(context);
+      } else {
+        return;
+      }
+      if(!mounted) return; // actually prevent against zombie context.
+
+      if (result != null) {
+        if (result.rememberPassword) {
+          await deviceManager.savePassword(result.password);
+        }
+      } else {
+        setState(() {
+          _isConnecting = false;
+        });
+      }
+    }
+
     try {
-      await _deviceManager.connect(_ipAddress, _password);
+      await _deviceManager.connect(_ipAddress, password);
       setState(() {
         _isConnected = true;
         _startConnectionChecker();
@@ -65,7 +74,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     }
   }
 
-  Future<void> _handleTemplateFileDrop(File droppedFile) async {
+  Future<void> _handleTemplateFileDrop(List<File> droppedFiles) async {
     if (!_isConnected) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -75,10 +84,11 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
       return;
     }
 
-    if (!droppedFile.path.toLowerCase().endsWith('.svg')) {
+    final validSvgFiles = droppedFiles.where((file) => file.path.toLowerCase().endsWith('.svg')).toList();
+    if (validSvgFiles.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Only SVG files are supported.')),
+          const SnackBar(content: Text('No valid SVG files found.')),
         );
       }
       return;
@@ -91,18 +101,20 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     }
 
     try {
-      final templateName = droppedFile.uri.pathSegments.last.replaceAll('.svg', '');
-      final templateFilename = templateName;
+      for (final droppedFile in validSvgFiles) {
+        final templateName = droppedFile.uri.pathSegments.last.replaceAll('.svg', '');
+        final templateFilename = templateName;
 
-      await _deviceManager.uploadTemplateAndUpdateJson(
-        localSvgFile: droppedFile,
-        templateName: templateName,
-        templateFilename: templateFilename,
-      );
+        await _deviceManager.uploadTemplateAndUpdateJson(
+          localSvgFile: droppedFile,
+          templateName: templateName,
+          templateFilename: templateFilename,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Template uploaded successfully!')),
+          SnackBar(content: Text('${validSvgFiles.length} template(s) uploaded successfully!')),
         );
       }
     } catch (e) {
@@ -120,7 +132,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     }
   }
 
-  Future<void> _handleSplashFileDrop(File droppedFile) async {
+  Future<void> _handleSplashFileDrop(List<File> droppedFiles) async {
     if (!_isConnected) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -130,10 +142,11 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
       return;
     }
 
-    if (!droppedFile.path.toLowerCase().endsWith('.png')) {
+    final validPngFiles = droppedFiles.where((file) => file.path.toLowerCase().endsWith('.png')).toList();
+    if (validPngFiles.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Only PNG files are supported for splash screens.')),
+          const SnackBar(content: Text('No valid PNG files found.')),
         );
       }
       return;
@@ -146,10 +159,11 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     }
 
     try {
-      await _deviceManager.uploadSplashFile(
-        pngFile: droppedFile,
-      );
-
+      for (final droppedFile in validPngFiles) {
+        await _deviceManager.uploadSplashFile(
+          pngFile: droppedFile,
+        );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Splash screen uploaded successfully!')),
@@ -176,7 +190,6 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     setState(() {
       _isConnected = false;
       _ipAddress = '';
-      _password = '';
       _errorMessage = null;
     });
   }
@@ -207,8 +220,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
             title: _isUploadingTemplate ? 'Uploading...' : 'Templates',
             icon: _isUploadingTemplate ? null : Icons.view_list_outlined,
             dropPath: '/templates',
-            onTap: _onTemplatesTapped,
-            onFileDropped: (path, droppedFile) => _handleTemplateFileDrop(droppedFile),
+            onFileDropped: (path, droppedFile) => _handleTemplateFileDrop(droppedFile), // <-- wrapped in [ ]
             showSpinner: _isUploadingTemplate,
           ),
           const SizedBox(height: 24),
@@ -216,7 +228,6 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
             title: 'Splash Screens',
             icon: Icons.power_settings_new_outlined,
             dropPath: '/splash',
-            onTap: () => widget.onCardTap('/splash'),
             onFileDropped: (path, droppedFile) => _handleSplashFileDrop(droppedFile),
           ),
           const Spacer(),
@@ -226,7 +237,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
               elevation: 0,
               color: Colors.grey.shade100,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(6),
                 side: BorderSide(
                   color: Colors.grey.shade400,
                   width: 1,        
@@ -252,9 +263,6 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
                             icon: const Icon(Icons.logout),
                             label: const Text('Disconnect'),
                             style: ElevatedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4.0),
-                              ),
                               foregroundColor: Colors.grey.shade700,
                               backgroundColor: Colors.grey.shade50,
                               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -282,7 +290,6 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
                               floatingLabelStyle: TextStyle(color: Colors.grey.shade700, fontSize: 14),
                               focusedBorder: OutlineInputBorder(
                                 borderSide: BorderSide(color: Colors.grey.shade700, width: 1),
-                                borderRadius: BorderRadius.circular(4),
                               ),
                               border: OutlineInputBorder(),
                               isDense: true,
@@ -292,40 +299,17 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
                             },
                           ),
                           const SizedBox(height: 12),
-                          TextField(
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: Color.fromARGB(255, 252, 252, 252),
-                              labelText: 'Password',
-                              hoverColor: Colors.grey[50],
-                              floatingLabelStyle: TextStyle(color: Colors.grey.shade700, fontSize: 14),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: Colors.grey.shade700, width: 1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            obscureText: true,
-                            onChanged: (value) {
-                              _password = value;
-                            },
-                          ),
-                          const SizedBox(height: 16),
                           ElevatedButton.icon(
                             onPressed: _isConnecting ? null : _connectToDevice,
                             icon: _isConnecting
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey[700]),
                                   )
                                 : const Icon(Icons.login),
                             label: Text(_isConnecting ? 'Connecting...' : 'Connect'),
                             style: ElevatedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4.0),
-                              ),
                               foregroundColor: Colors.grey.shade700,
                               backgroundColor: Colors.grey.shade50,
                               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -356,32 +340,30 @@ class _DashboardDropCard extends StatelessWidget {
   final String title;
   final IconData? icon;
   final String dropPath;
-  final VoidCallback onTap;
-  final void Function(String path, File droppedFile) onFileDropped;
+  final void Function(String path, List<File> droppedFiles) onFileDropped;
   final bool showSpinner;
 
   const _DashboardDropCard({
     required this.title,
     required this.icon,
     required this.dropPath,
-    required this.onTap,
     required this.onFileDropped,
     this.showSpinner = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<FileSystemEntity>(
-      onAcceptWithDetails: (DragTargetDetails<FileSystemEntity> details) {
-        final fileEntity = details.data;
-        if (fileEntity is File) {
-          onFileDropped(dropPath, fileEntity);
+      return DragTarget<List<FileSystemEntity>>(
+      onAcceptWithDetails: (DragTargetDetails<List<FileSystemEntity>> details) {
+        final droppedEntities = details.data;
+        final files = droppedEntities.whereType<File>().toList();
+        if (files.isNotEmpty) {
+          onFileDropped(dropPath, files); // Pass a List<File>
         }
       },
       builder: (context, candidateData, rejectedData) {
         final isHighlighted = candidateData.isNotEmpty;
         return InkWell(
-          onTap: onTap,
           borderRadius: BorderRadius.circular(5),
           child: Container(
             width: double.infinity,
@@ -392,17 +374,17 @@ class _DashboardDropCard extends StatelessWidget {
               border: Border.all(
                 color: isHighlighted ? Colors.grey.shade700 : Colors.grey.shade400,
                 width: 1,
-                style: BorderStyle.solid, // We could do dashed here if Flutter natively supported it
+                style: BorderStyle.solid, 
               ),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (showSpinner)
-                  const SizedBox(
+                  SizedBox(
                     width: 32,
                     height: 32,
-                    child: CircularProgressIndicator(strokeWidth: 3),
+                    child: CircularProgressIndicator(color: Colors.grey[700], strokeWidth: 3),
                   )
                 else if (icon != null)
                   Icon(icon, size: 40, color: Colors.black54),

@@ -20,7 +20,8 @@ filling the root partition.
 
 - Bulk upload
 - Bulk restore (after OS update removes all your nice templates)
-- Icon selection
+- Code signing
+- Build on Windows & Linux (should build "out of the box" on those platform with Flutter SDK)
 
 
 

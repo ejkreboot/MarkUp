@@ -24,11 +24,9 @@ class PreviewPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16.0),
       child: Card(
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         child: Container (
           decoration: BoxDecoration(
             color: Color(0xFFFDFDFD),
-            borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: Colors.grey.shade400,
               width: 1,
