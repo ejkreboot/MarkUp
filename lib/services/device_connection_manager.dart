@@ -11,8 +11,13 @@ class DeviceConnectionManager {
   late dynamic _client; 
   late SSHSocket _socket;
   bool _isConnected = false;
-  static const _storage = FlutterSecureStorage();
   static const _passwordKey = 'remarkable_password';
+  final _storage = FlutterSecureStorage(
+    mOptions: const MacOsOptions(
+      accessibility: KeychainAccessibility.first_unlock,
+      useDataProtectionKeyChain: false,
+    ),
+  );
 
   String? _cachedPassword;
   bool get isConnected => _isConnected;
@@ -43,7 +48,6 @@ class DeviceConnectionManager {
   }
 
   Future<void> connect(String ip, String? password) async {
-    if(password == null) return;
     _socket = await SSHSocket.connect(ip, 22);
     _client = SSHClient(
       _socket,
@@ -145,6 +149,7 @@ class DeviceConnectionManager {
     required File localSvgFile,
     required String templateName,
     required String templateFilename,
+    required String category
   }) async {
     _ensureConnected();
     if (!localSvgFile.path.toLowerCase().endsWith('.svg')) {
@@ -165,6 +170,7 @@ class DeviceConnectionManager {
       templatesJsonPath: templatesJsonPath,
       templateName: templateName,
       templateFilename: normalizedFilename.replaceAll('.svg', ''),
+      category: category
     );
   }
 
@@ -206,6 +212,7 @@ class DeviceConnectionManager {
     required String templatesJsonPath,
     required String templateName,
     required String templateFilename,
+    required String category
   }) async {
     final templatesJsonString = await downloadFile(templatesJsonPath);
     final templatesList = TemplatesList.fromJson(templatesJsonString);

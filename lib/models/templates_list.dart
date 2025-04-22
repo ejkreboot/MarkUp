@@ -27,12 +27,12 @@ class TemplatesList {
     return encoder.convert(data);
   }
 
-  void addTemplate({required String name, required String filename}) {
+  void addTemplate({required String name, required String filename, required String category}) {
     final newEntry = TemplateEntry(
       name: name,
       filename: filename,
       iconCode: '\ue9a9', // Default for now
-      categories: ['User'], // Default for now
+      categories: [category], 
     );
     templates.add(newEntry);
   }

@@ -5,7 +5,6 @@ import 'dart:async';
 import 'package:markup/dialogs/password_dialog.dart';  // <-- Import your dialog function
 
 class DeviceSidebar extends StatefulWidget {
-
   const DeviceSidebar({
     super.key
   });
@@ -21,20 +20,25 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   bool _isUploadingTemplate = false;
   String? _errorMessage;
   final DeviceConnectionManager _deviceManager = DeviceConnectionManager();
+  final TextEditingController _categoryController = TextEditingController();
+
+  @override
+  void dispose() {
+    _categoryController.dispose();
+    super.dispose();
+  }
 
   Timer? _connectionCheckerTimer;
   
   Future<void> _connectToDevice() async {
     PasswordDialogResult? result;
+    final deviceManager = DeviceConnectionManager();
 
     setState(() {
       _isConnecting = true;
       _errorMessage = null;
     });
 
-    final deviceManager = DeviceConnectionManager();
-
-    // To try retrieving a password:
     String? password = await deviceManager.getSavedPassword();
 
     if (password == null) {
@@ -49,10 +53,12 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
         if (result.rememberPassword) {
           await deviceManager.savePassword(result.password);
         }
+        password = result.password;
       } else {
         setState(() {
           _isConnecting = false;
         });
+        return;
       }
     }
 
@@ -84,6 +90,8 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
       return;
     }
 
+    final category = _categoryController.text.trim().isEmpty ? "User" : _categoryController.text.trim();
+
     final validSvgFiles = droppedFiles.where((file) => file.path.toLowerCase().endsWith('.svg')).toList();
     if (validSvgFiles.isEmpty) {
       if (mounted) {
@@ -109,6 +117,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
           localSvgFile: droppedFile,
           templateName: templateName,
           templateFilename: templateFilename,
+          category: category
         );
       }
 
@@ -216,6 +225,13 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
       child: Column(
         children: [
           const SizedBox(height: 4),
+          TextField(
+            controller: _categoryController,
+            decoration: const InputDecoration(
+              labelText: 'Category'
+            ),
+          ),
+          const SizedBox(height: 8),
           _DashboardDropCard(
             title: _isUploadingTemplate ? 'Uploading...' : 'Templates',
             icon: _isUploadingTemplate ? null : Icons.view_list_outlined,

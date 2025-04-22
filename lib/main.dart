@@ -31,6 +31,7 @@ class MarkUpApp extends StatelessWidget {
 ThemeData _buildMarkUpTheme() {
   const primaryColor = Color(0xFF333333); // Deep gray
   const secondaryColor = Color(0xFF666666); // Softer gray
+  const lightGray = Color(0xFFb1b1b1);
   const accentColor = Color(0xFF0099FF); // Subtle blue for active elements
   const lightColor = Color.fromARGB(255, 245, 245, 245);
 
@@ -55,11 +56,19 @@ ThemeData _buildMarkUpTheme() {
     inputDecorationTheme: const InputDecorationTheme(
       border: OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(6)),
-        borderSide: BorderSide(color: Color(0xFFCCCCCC)),
-      ),
+        borderSide: BorderSide(
+          color: lightGray, width: 1  // Or whatever fits your theme
+        ),
+      ),      
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(6)),
+        borderSide: BorderSide(
+          color: lightGray, width: 1  // Or whatever fits your theme
+        ),
+      ),      
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(6)),
-        borderSide: BorderSide(color: Color.fromARGB(255, 81, 81, 81), width: 2),
+        borderSide: BorderSide(color: secondaryColor, width: 2),
       ),
       filled: true,
       fillColor: Color(0xFFF2F2F2),
