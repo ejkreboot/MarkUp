@@ -29,7 +29,7 @@ Future<SSHCommandResult> sshExecuteCommand(
         .transform(StreamTransformer.fromBind(utf8.decoder.bind))
         .join();
 
-    final exitCode = await session.exitCode;
+    final exitCode = session.exitCode;
     await session.done;
 
     if (stderr.isNotEmpty) {

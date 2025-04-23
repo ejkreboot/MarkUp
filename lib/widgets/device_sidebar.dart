@@ -5,9 +5,10 @@ import 'dart:async';
 import 'package:markup/dialogs/password_dialog.dart';  // <-- Import your dialog function
 
 class DeviceSidebar extends StatefulWidget {
-  const DeviceSidebar({
-    super.key
-  });
+  final DeviceConnectionManager deviceManager;
+  final VoidCallback onConnected;
+
+  const DeviceSidebar({super.key, required this.deviceManager, required this.onConnected});
 
   @override
   State<DeviceSidebar> createState() => _DeviceSidebarState();
@@ -19,7 +20,6 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   bool _isConnecting = false;
   bool _isUploadingTemplate = false;
   String? _errorMessage;
-  final DeviceConnectionManager _deviceManager = DeviceConnectionManager();
   final TextEditingController _categoryController = TextEditingController();
 
   @override
@@ -30,28 +30,26 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
 
   Timer? _connectionCheckerTimer;
   
-  Future<void> _connectToDevice() async {
-    PasswordDialogResult? result;
-    final deviceManager = DeviceConnectionManager();
+Future<void> _connectToDevice() async {
+  bool retry = true;
+  String? password;
 
-    setState(() {
-      _isConnecting = true;
-      _errorMessage = null;
-    });
+  setState(() {
+    _isConnecting = true;
+    _errorMessage = null;
+  });
 
-    String? password = await deviceManager.getSavedPassword();
-
+  while (retry) {
+    retry = false; 
+    password = await widget.deviceManager.getSavedPassword();
     if (password == null) {
-      if(mounted) { // make linter happy
-        result = await showPasswordDialog(context);
-      } else {
-        return;
-      }
-      if(!mounted) return; // actually prevent against zombie context.
+      if (!mounted) return;
+      final result = await showPasswordDialog(context);
+      if (!mounted) return;
 
       if (result != null) {
         if (result.rememberPassword) {
-          await deviceManager.savePassword(result.password);
+          await widget.deviceManager.savePassword(result.password);
         }
         password = result.password;
       } else {
@@ -63,22 +61,35 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     }
 
     try {
-      await _deviceManager.connect(_ipAddress, password);
+      await widget.deviceManager.connect(_ipAddress, password);
       setState(() {
         _isConnected = true;
         _startConnectionChecker();
       });
+      widget.onConnected();
+    } on TimeoutException catch (_) {
+      setState(() {
+         ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Connection timed out. Verify device is awake and IP address correct.')),
+        );
+       });
     } catch (e) {
       setState(() {
         _isConnected = false;
-        _errorMessage = 'Failed to connect';
       });
+      await widget.deviceManager.clearPassword();
+      password = null;
+      retry = true; 
     } finally {
-      setState(() {
-        _isConnecting = false;
-      });
+      if (!retry) {
+        setState(() {
+          _isConnecting = false;
+        });
+      }
     }
   }
+}
+
 
   Future<void> _handleTemplateFileDrop(List<File> droppedFiles) async {
     if (!_isConnected) {
@@ -113,7 +124,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
         final templateName = droppedFile.uri.pathSegments.last.replaceAll('.svg', '');
         final templateFilename = templateName;
 
-        await _deviceManager.uploadTemplateAndUpdateJson(
+        await widget.deviceManager.uploadTemplateAndUpdateJson(
           localSvgFile: droppedFile,
           templateName: templateName,
           templateFilename: templateFilename,
@@ -169,7 +180,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
 
     try {
       for (final droppedFile in validPngFiles) {
-        await _deviceManager.uploadSplashFile(
+        await widget.deviceManager.uploadSplashFile(
           pngFile: droppedFile,
         );
       }
@@ -194,7 +205,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   }
 
   void _disconnect() {
-    _deviceManager.disconnect();
+    widget.deviceManager.disconnect();
     _connectionCheckerTimer?.cancel();
     setState(() {
       _isConnected = false;
@@ -206,7 +217,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   void _startConnectionChecker() {
     _connectionCheckerTimer?.cancel();
     _connectionCheckerTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
-      final alive = await _deviceManager.isConnectionAlive();
+      final alive = await widget.deviceManager.isConnectionAlive();
       if (!alive && _isConnected) {
         setState(() {
           _isConnected = false;
@@ -239,7 +250,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
             onFileDropped: (path, droppedFile) => _handleTemplateFileDrop(droppedFile), // <-- wrapped in [ ]
             showSpinner: _isUploadingTemplate,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           _DashboardDropCard(
             title: 'Splash Screens',
             icon: Icons.power_settings_new_outlined,
@@ -266,7 +277,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Icon(Icons.check_circle_outline, size: 48, color: Colors.green),
+                          const Icon(Icons.check_circle_outline, size: 48, color: Colors.grey),
                           const SizedBox(height: 12),
                           Text(
                             'Connected to\n$_ipAddress',
@@ -383,7 +394,7 @@ class _DashboardDropCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(5),
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24),
+            padding: const EdgeInsets.symmetric(vertical: 18),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(6),

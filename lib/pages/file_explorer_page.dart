@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../services/device_connection_manager.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../widgets/device_sidebar.dart';
 import '../widgets/file_list.dart';
 import '../widgets/preview_panel.dart';
+import '../widgets/status_bar.dart';
 
 class FileExplorerPage extends StatefulWidget {
   const FileExplorerPage({super.key});
@@ -16,11 +18,23 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
   String currentPath = Platform.environment['HOME'] ?? '/';
   List<FileSystemEntity> entries = [];
   FileSystemEntity? selectedFile;
+  Map<String, String>? _diskSpace;
+  late final DeviceConnectionManager _deviceManager;
 
   @override
   void initState() {
     super.initState();
     _loadDirectory(currentPath);
+    _deviceManager = DeviceConnectionManager();
+  }
+
+  Future<void> _updateDiskSpace() async {
+    if (_deviceManager.isConnected) {
+      final space = await _deviceManager.getDiskSpace();
+      setState(() {
+        _diskSpace = space;
+      });
+    }
   }
 
   Future<void> _loadDirectory(String path) async {
@@ -90,29 +104,50 @@ class _FileExplorerPageState extends State<FileExplorerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
+      body: Column(
         children: [
-          DeviceSidebar(),
-          const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
           Expanded(
-            flex: 2,
-            child: FileList(
-              entries: entries,
-              currentPath: currentPath,
-              onDirectoryTap: _handleDirectoryTap,
-              onSelectionChanged: _handleSelectionChange,
+            child: Row(
+              children: [
+                DeviceSidebar(deviceManager: _deviceManager, onConnected: _updateDiskSpace),
+                const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
+                Expanded(
+                  flex: 2,
+                  child: FileList(
+                    entries: entries,
+                    currentPath: currentPath,
+                    onDirectoryTap: _handleDirectoryTap,
+                    onSelectionChanged: _handleSelectionChange,
+                  ),
+                ),
+                const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
+                SizedBox(
+                  width: 320,
+                  child: PreviewPanel(
+                    selectedFile: selectedFile,
+                    onClose: _handleClosePreview,
+                  ),
+                ),
+              ],
             ),
           ),
-          const VerticalDivider(width: 1, color: Color.fromARGB(255, 205, 205, 205)),
-          SizedBox(
-            width: 320,
-            child: PreviewPanel(
-              selectedFile: selectedFile,
-              onClose: _handleClosePreview,
-            ),
+          const Divider(height: 1),
+          DeviceStatusBar(
+            diskSpace: _diskSpace,
+            onRestart: () async {
+              try {
+                await _deviceManager.restartXochitl();
+              } catch (e) {
+                if(!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to restart: $e')),
+                );
+              }
+            },
           ),
         ],
       ),
     );
   }
+
 }

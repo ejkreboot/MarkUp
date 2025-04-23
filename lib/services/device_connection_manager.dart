@@ -19,25 +19,22 @@ class DeviceConnectionManager {
     ),
   );
 
-  String? _cachedPassword;
   bool get isConnected => _isConnected;
 
   Future<String?> getSavedPassword() async {
-    if (_cachedPassword != null) {
-      return _cachedPassword;
-    }
-    _cachedPassword = await _storage.read(key: _passwordKey);
-    return _cachedPassword;
+    final password = await _storage.read(key: _passwordKey);
+    return password;
   }
 
   Future<void> savePassword(String password) async {
-    _cachedPassword = password;
     await _storage.write(key: _passwordKey, value: password);
   }
 
   Future<void> clearPassword() async {
-    _cachedPassword = null;
     await _storage.delete(key: _passwordKey);
+    // Debug check: was it really deleted?
+    final test = await _storage.read(key: _passwordKey);
+    debugPrint('Password after delete: $test'); // should be null
   }
 
   DeviceConnectionManager({dynamic testClient}) {
@@ -48,12 +45,18 @@ class DeviceConnectionManager {
   }
 
   Future<void> connect(String ip, String? password) async {
-    _socket = await SSHSocket.connect(ip, 22);
+    _socket = await SSHSocket.connect(ip, 22).timeout(
+      const Duration(seconds: 4),
+      onTimeout: () {
+        throw TimeoutException('Connection to $ip timed out');
+      },
+    );
     _client = SSHClient(
       _socket,
       username: 'root',
       onPasswordRequest: () => password,
     );
+    await _client.authenticated; // This awaits until authenticated or throws
     _isConnected = true;
   }
 
@@ -220,9 +223,34 @@ class DeviceConnectionManager {
     templatesList.addTemplate(
       name: templateName,
       filename: templateFilename,
+      category: category
     );
 
     final updatedJsonString = _safeJsonEncode(templatesList);
     await uploadStringAsFile(updatedJsonString, templatesJsonPath);
   }
+
+  Future<Map<String, String>> getDiskSpace() async {
+    _ensureConnected();
+    final result = await sshExecuteCommand(_client, 'df -h / /home');
+    final lines = result.stdout.toString().trim().split('\n');
+    final data = <String, String>{};
+
+    for (final line in lines.skip(1)) {
+      final parts = line.split(RegExp(r'\s+'));
+      if (parts.length >= 6) {
+        final mountPoint = parts[5];
+        final available = parts[3];
+        data[mountPoint] = "$available (${parts[4]} used)";
+      }
+    }
+
+    return data; // e.g., {'/': '11G', '/home': '500M'}
+  }
+
+  Future<void> restartXochitl() async {
+    _ensureConnected();
+    await sshExecuteCommand(_client, 'systemctl restart xochitl');
+  }
+  
 }
