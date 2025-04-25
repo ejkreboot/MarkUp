@@ -184,28 +184,42 @@ class DeviceConnectionManager {
     required File localSvgFile,
     required String templateName,
     required String templateFilename,
-    required String category
+    required String category,
   }) async {
     _ensureConnected();
+
     if (!localSvgFile.path.toLowerCase().endsWith('.svg')) {
       throw Exception('Only SVG files are supported.');
     }
 
     final rawFilename = localSvgFile.uri.pathSegments.last;
     final normalizedFilename = normalizeTemplateFilename(rawFilename);
+    final strippedFilename = normalizedFilename.replaceAll('.svg', '');
 
+    // Step 1: Download and parse templates.json
+    final templatesJsonPath = '/usr/share/remarkable/templates/templates.json';
+    final templatesJsonString = await downloadFile(templatesJsonPath);
+    final templatesList = TemplatesList.fromJson(templatesJsonString);
+
+    // Step 2: Check if the template already exists
+    final templateExists = templatesList.templates.any((template) => template.filename == strippedFilename);
+    if (templateExists) {
+      throw Exception('Template already exists');
+    }
+
+    // Step 3: Proceed with upload
     await ensureTemplatesFolderExists();
     await uploadFile(localSvgFile, '/home/root/templates/$normalizedFilename');
     await createTemplateSymlink(normalizedFilename);
 
-    final templatesJsonPath = '/usr/share/remarkable/templates/templates.json';
+    // Step 4: Update templates.json
     final backupPath = '/usr/share/remarkable/templates/templates.json.bak';
     await _ensureBackupExists(templatesJsonPath, backupPath);
     await _updateTemplatesJson(
       templatesJsonPath: templatesJsonPath,
       templateName: templateName,
-      templateFilename: normalizedFilename.replaceAll('.svg', ''),
-      category: category
+      templateFilename: strippedFilename,
+      category: category,
     );
   }
 

@@ -140,7 +140,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
+          SnackBar(content: Text('Upload failed: ${e.toString().replaceAll("Exception:", "")}')),
         );
       }
     } finally {
@@ -194,7 +194,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
+          SnackBar(content: Text('Upload failed: ${e.toString().replaceAll("Exception:", "")}')),
         );
       }
     } finally {
