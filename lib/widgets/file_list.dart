@@ -116,6 +116,8 @@ class _FileListState extends State<FileList> {
                   onTap: () {
                     if (isDir) {
                       widget.onDirectoryTap(path);
+                      selectedFiles.clear();
+                      widget.onSelectionChanged(selectedFiles.toList());
                       return;
                     }
 
