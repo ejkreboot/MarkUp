@@ -81,6 +81,26 @@ class DeviceConnectionManager {
 
   Future<void> uploadFile(File localFile, String remotePath) async {
     _ensureConnected();
+
+    // Check disk space
+    final diskSpace = await getDiskSpace();
+    final rootFreeSpace = diskSpace['/'];
+    final homeFreeSpace = diskSpace['/home'];
+
+    if (rootFreeSpace == null || homeFreeSpace == null) {
+      throw Exception('Unable to determine free space on device.');
+    }
+
+    // Parse free space values
+    final rootFreeMB = _parseFreeSpace(rootFreeSpace);
+    final homeFreeMB = _parseFreeSpace(homeFreeSpace);
+
+    // Ensure minimum free space
+    if (rootFreeMB < 5.0 || homeFreeMB < 1024.0) {
+      throw Exception('Insufficient free space on device to upload safely.');
+    }
+
+    // Proceed with file upload
     final sftp = await _client.sftp();
     final remoteFile = await sftp.open(
       remotePath,
@@ -266,4 +286,24 @@ class DeviceConnectionManager {
     await sshExecuteCommand(_client, 'systemctl restart xochitl');
   }
   
+  double _parseFreeSpace(String freeSpace) {
+    final match = RegExp(r'(\d+(\.\d+)?)([KMG])').firstMatch(freeSpace);
+    if (match == null) {
+      throw Exception('Unable to parse free space: $freeSpace');
+    }
+
+    final value = double.parse(match.group(1)!);
+    final unit = match.group(3);
+
+    switch (unit) {
+      case 'K':
+        return value / 1024; // Convert KB to MB
+      case 'M':
+        return value; // Already in MB
+      case 'G':
+        return value * 1024; // Convert GB to MB
+      default:
+        throw Exception('Unknown unit in free space: $unit');
+    }
+  }
 }

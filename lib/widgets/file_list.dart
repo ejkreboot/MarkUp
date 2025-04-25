@@ -71,7 +71,11 @@ class _FileListState extends State<FileList> {
                 if (isUpEntry) {
                   return _buildUpEntry(
                     context,
-                    () => widget.onDirectoryTap(Directory(widget.currentPath).parent.path), 
+                    () {
+                      selectedFiles.clear();
+                      widget.onSelectionChanged(selectedFiles.toList());
+                      widget.onDirectoryTap(Directory(widget.currentPath).parent.path);
+                    }
                   );
                 }
 
