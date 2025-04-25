@@ -107,10 +107,22 @@ class DeviceConnectionManager {
     await sshExecuteCommand(_client, 'test -d /home/root/templates || mkdir -p /home/root/templates');
   }
 
+  Future<void> ensureSplashFolderExists() async {
+    _ensureConnected();
+    await sshExecuteCommand(_client, 'test -d /home/root/splash || mkdir -p /home/root/splash');
+  }
+
   Future<void> createTemplateSymlink(String filename) async {
     _ensureConnected();
     final sourcePath = '/home/root/templates/$filename';
     final destPath = '/usr/share/remarkable/templates/$filename';
+    await sshExecuteCommand(_client, 'ln -sf "$sourcePath" "$destPath"');
+  }
+
+  Future<void> createSplashSymlink(String filename) async {
+    _ensureConnected();
+    final sourcePath = '/home/root/splash/$filename';
+    final destPath = '/usr/share/remarkable/$filename';
     await sshExecuteCommand(_client, 'ln -sf "$sourcePath" "$destPath"');
   }
 
@@ -182,12 +194,13 @@ class DeviceConnectionManager {
   }) async {
     _ensureConnected();
 
-    if (!pngFile.path.toLowerCase().endsWith('.svg')) {
+    if (!pngFile.path.toLowerCase().endsWith('.png')) {
       throw Exception('Only PNG files are supported for splash files.');
     }
-
-    final filename = pngFile.uri.pathSegments.last;
-    await uploadFile(pngFile, '/usr/share/remarkable/$filename');
+    final baseFilename = pngFile.uri.pathSegments.last;
+    await ensureSplashFolderExists();
+    await uploadFile(pngFile, '/home/root/templates/$baseFilename');
+    await createSplashSymlink(baseFilename);
   }
 
   Future<void> _ensureBackupExists(String templatesJsonPath, String backupPath) async {

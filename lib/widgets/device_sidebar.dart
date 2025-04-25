@@ -19,6 +19,7 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _isUploadingTemplate = false;
+  bool _isUploadingSplash = false; // New state for uploading splash screens
   String? _errorMessage;
   final TextEditingController _categoryController = TextEditingController();
 
@@ -30,66 +31,65 @@ class _DeviceSidebarState extends State<DeviceSidebar> {
 
   Timer? _connectionCheckerTimer;
   
-Future<void> _connectToDevice() async {
-  bool retry = true;
-  String? password;
+  Future<void> _connectToDevice() async {
+    bool retry = true;
+    String? password;
 
-  setState(() {
-    _isConnecting = true;
-    _errorMessage = null;
-  });
+    setState(() {
+      _isConnecting = true;
+      _errorMessage = null;
+    });
 
-  while (retry) {
-    retry = false; 
-    password = await widget.deviceManager.getSavedPassword();
-    if (password == null) {
-      if (!mounted) return;
-      final result = await showPasswordDialog(context);
-      if (!mounted) return;
+    while (retry) {
+      retry = false; 
+      password = await widget.deviceManager.getSavedPassword();
+      if (password == null) {
+        if (!mounted) return;
+        final result = await showPasswordDialog(context);
+        if (!mounted) return;
 
-      if (result != null) {
-        if (result.rememberPassword) {
-          await widget.deviceManager.savePassword(result.password);
+        if (result != null) {
+          if (result.rememberPassword) {
+            await widget.deviceManager.savePassword(result.password);
+          }
+          password = result.password;
+        } else {
+          setState(() {
+            _isConnecting = false;
+          });
+          return;
         }
-        password = result.password;
-      } else {
-        setState(() {
-          _isConnecting = false;
-        });
-        return;
       }
-    }
 
-    try {
-      await widget.deviceManager.connect(_ipAddress, password);
-      setState(() {
-        _isConnected = true;
-        _startConnectionChecker();
-      });
-      widget.onConnected();
-    } on TimeoutException catch (_) {
-      setState(() {
-         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Connection timed out. Verify device is awake and IP address correct.')),
-        );
-       });
-    } catch (e) {
-      setState(() {
-        _isConnected = false;
-      });
-      await widget.deviceManager.clearPassword();
-      password = null;
-      retry = true; 
-    } finally {
-      if (!retry) {
+      try {
+        await widget.deviceManager.connect(_ipAddress, password);
         setState(() {
-          _isConnecting = false;
+          _isConnected = true;
+          _startConnectionChecker();
         });
+        widget.onConnected();
+      } on TimeoutException catch (_) {
+        setState(() {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Connection timed out. Verify device is awake and IP address correct.')),
+          );
+        });
+      } catch (e) {
+        setState(() {
+          _isConnected = false;
+        });
+        await widget.deviceManager.clearPassword();
+        password = null;
+        retry = true; 
+      } finally {
+        if (!retry) {
+          setState(() {
+            _isConnecting = false;
+          });
+        }
       }
     }
   }
-}
-
 
   Future<void> _handleTemplateFileDrop(List<File> droppedFiles) async {
     if (!_isConnected) {
@@ -153,7 +153,9 @@ Future<void> _connectToDevice() async {
   }
 
   Future<void> _handleSplashFileDrop(List<File> droppedFiles) async {
+
     if (!_isConnected) {
+        _isUploadingSplash = false; // Use the new state
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Not connected to device.')),
@@ -174,7 +176,7 @@ Future<void> _connectToDevice() async {
 
     if (mounted) {
       setState(() {
-        _isUploadingTemplate = true; // TODO: Create separate state for splash screens
+        _isUploadingSplash = true; // Use the new state
       });
     }
 
@@ -198,7 +200,7 @@ Future<void> _connectToDevice() async {
     } finally {
       if (mounted) {
         setState(() {
-          _isUploadingTemplate = false;
+          _isUploadingSplash = false; // Reset the new state
         });
       }
     }
@@ -252,8 +254,8 @@ Future<void> _connectToDevice() async {
           ),
           const SizedBox(height: 12),
           _DashboardDropCard(
-            title: 'Splash Screens',
-            icon: Icons.power_settings_new_outlined,
+            title: _isUploadingSplash ? 'Uploading...' : 'Splash Screens',
+            icon: _isUploadingTemplate ? null : Icons.power_settings_new_outlined,
             dropPath: '/splash',
             onFileDropped: (path, droppedFile) => _handleSplashFileDrop(droppedFile),
           ),
